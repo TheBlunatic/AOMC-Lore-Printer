@@ -30,19 +30,31 @@ namespace TheBlunatic_s_Lore_Printer_9000
             for (int y = 0; y < bmp.Height; y++)
             {
                 string line = LINE_PREFIX;
+
                 string lastColor = null;
+
                 for (int x = 0; x < bmp.Width; x++)
                 {
-                    string colorCode = Blunatic.Parsing.Hex.GetString(bmp.GetPixel(x, y));
-                    if (lastColor == colorCode)
+                    Color color = bmp.GetPixel(x, y);
+
+                    if (color.A == 255)
                     {
-                        line += '\u2588';
-                        continue;
+                        string colorCode = Blunatic.Parsing.Hex.GetString(color);
+
+                        if (lastColor == colorCode)
+                        {
+                            line += '\u2588';
+                            continue;
+                        }
+                        else
+                        {
+                            line += $"<#{colorCode}>\u2588";
+                            lastColor = colorCode;
+                        }
                     }
                     else
                     {
-                        line += $"<#{colorCode}>\u2588";
-                        lastColor = colorCode;
+                        line += $"<b> </b> ";
                     }
                 }
                 lines[y] = line;
