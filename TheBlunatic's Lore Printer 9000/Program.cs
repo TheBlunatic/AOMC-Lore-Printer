@@ -175,12 +175,12 @@ namespace LoreApp
             {
                 ConvertFile(fileInput, fileOutput);
             }
-            catch (FileNotFoundException e)
+            catch (FileNotFoundException)
             {
                 WriteLine($"Cannot find a file named '{fileName}'.", ConsoleColor.DarkRed);
                 return;
             }
-            catch (ArgumentException e)
+            catch (ArgumentException)
             {
                 WriteLine($"The given file name '{fileName}' is not valid.", ConsoleColor.DarkRed);
                 return;
@@ -199,7 +199,7 @@ namespace LoreApp
             {
                 lines = File.ReadAllLines(path);
             }
-            catch (FileNotFoundException e)
+            catch (FileNotFoundException)
             {
                 if (path.EndsWith(".txt"))
                 {
