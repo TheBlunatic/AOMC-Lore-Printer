@@ -80,6 +80,7 @@ namespace LoreApp
         const string LINE_PREFIX = "/customize lore add <i:false>";
 
         static string ACTIVE_BASE_DIRECTORY;
+        static string INSTALL_DIRECTORY;
 
         static Dictionary<string, (Action, string)> COMMANDS = new Dictionary<string, (Action, string)>
         {
@@ -90,7 +91,7 @@ namespace LoreApp
             { "copy", (DoCopy, "Sequentially copy commands to the clipboard") },
             { "clear", (null, "Clear the console") },
             { "reload", (DoConfigReload, "Reloads config files") },
-            { "config", (DoDisplayConfig, "Displays loaded configuration") },
+            { "config", (DoDisplayConfig, "Displays loaded configuration and allows for modification") },
             { "whereami", (DoShowActiveBaseDirectory, "Displays the base directory this application is currently active in") },
         };
 
@@ -106,11 +107,11 @@ namespace LoreApp
         }
         static SplitPath GetConfigFolder()
         {
-            return new SplitPath(ACTIVE_BASE_DIRECTORY, $"{CONFIG_FOLDER}\\", "", "");
+            return new SplitPath(INSTALL_DIRECTORY, $"{CONFIG_FOLDER}\\", "", "");
         }
         static SplitPath GetConfigFile()
         {
-            return new SplitPath(ACTIVE_BASE_DIRECTORY, $"{CONFIG_FOLDER}\\", "config", ".txt");
+            return new SplitPath(INSTALL_DIRECTORY, $"{CONFIG_FOLDER}\\", "config", ".txt");
         }
         static SplitPath ConstructSplitPathFromString(string path)
         {
@@ -217,7 +218,7 @@ namespace LoreApp
                 }
                 catch (Exception e)
                 {
-                    WriteLine($"Failed to convert '{file}' ({e.GetType().FullName})", ConsoleColor.Red);
+                    WriteLine($"ERROR: Failed to convert '{file}' ({e.GetType().FullName})", ConsoleColor.DarkRed);
                 }
             }
             foreach (string directory in directories)
@@ -265,17 +266,76 @@ namespace LoreApp
         }
         static void DoDisplayConfig()
         {
-            Console.WriteLine("CONFIGURATION:");
-            foreach (IConfigParameter configParam in CONFIG.ParameterDictionary.Values)
+            void displayList()
             {
-                ConsoleColor originColor = Console.ForegroundColor;
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.Write($"{configParam.ID}");
-                Console.ForegroundColor = originColor;
-                Console.Write(" = ");
-                Console.ForegroundColor = configParam.GetMostSuitableValueColor();
-                Console.WriteLine(configParam.ToString());
-                Console.ForegroundColor = originColor;
+                Console.WriteLine("CONFIGURATION:");
+                for (int i = 0; i < CONFIG.ParameterIDArray.Length; i++)
+                {
+                    IConfigParameter configParam = CONFIG.ParameterDictionary[CONFIG.ParameterIDArray[i]];
+                    ConsoleColor originColor = Console.ForegroundColor;
+                    Console.Write($"[{i}] ");
+                    Console.ForegroundColor = ConsoleColor.DarkYellow;
+                    Console.Write($"{configParam.ID}");
+                    Console.ForegroundColor = originColor;
+                    Console.Write(" = ");
+                    Console.ForegroundColor = configParam.GetMostSuitableValueColor();
+                    Console.WriteLine(configParam.ToString());
+                    Console.ForegroundColor = originColor;
+                }
+            }
+
+            displayList();
+
+            while (true)
+            {
+                Console.WriteLine($"\nType 'end' to finish viewing, 'list' to re-print the list, or enter a parameter index to modify it.\nBe warned that config values are not validated, and modification may cause unintended behaviour.");
+
+                string input = GetInput();
+
+                if (input == "end") break;
+                
+                if (input == "list")
+                {
+                    displayList();
+                    continue;
+                }
+
+                if (!int.TryParse(input, out int index) || index < 0 || index >= CONFIG.ParameterIDArray.Length)
+                {
+                    WriteLine("ERROR: Invalid parameter index.", ConsoleColor.DarkRed);
+                    continue;
+                }
+
+                Console.WriteLine($"Please enter a new value for the {CONFIG.ParameterDictionary[CONFIG.ParameterIDArray[index]].GetPropertyType().Name} '{CONFIG.ParameterIDArray[index]}'. (Type '/cancel' to cancel, or '/lock' to disable these commands)");
+
+                string value = GetInput();
+
+                if (value == "/cancel")
+                {
+                    Console.WriteLine("Cancelled.");
+                    continue;
+                }
+                else if (value == "/lock")
+                {
+                    Console.WriteLine("Commands disabled. This is only really useful if you actually want to input one of the commands as a value. That being said, if you suddenly don't want to change this parameter, you'll need to close the application.");
+                    value = GetInput();
+                }
+
+                try
+                {
+                    if (!CONFIG.ParameterDictionary[CONFIG.ParameterIDArray[index]].TrySetValue(value)) throw new ArgumentException();
+
+                }
+                catch
+                {
+                    WriteLine("ERROR: Invalid parameter value.", ConsoleColor.DarkRed);
+                    continue;
+                }
+
+                SaveConfig(CONFIG);
+                ReloadConfig();
+
+                Console.WriteLine($"Parameter successfully updated! Configuration has been saved and reloaded.");
             }
         }
         static void DoHelp()
@@ -301,12 +361,12 @@ namespace LoreApp
             }
             catch (FileNotFoundException)
             {
-                WriteLine($"Cannot find a file named '{fileName}'.", ConsoleColor.DarkRed);
+                WriteLine($"ERROR: Cannot find a file named '{fileName}'.", ConsoleColor.DarkRed);
                 return;
             }
             catch (ArgumentException)
             {
-                WriteLine($"The given file name '{fileName}' is not valid.", ConsoleColor.DarkRed);
+                WriteLine($"ERROR: The given file name '{fileName}' is not valid.", ConsoleColor.DarkRed);
                 return;
             }
 
@@ -327,11 +387,11 @@ namespace LoreApp
             {
                 if (path.FileName.EndsWith(".txt"))
                 {
-                    WriteLine("File not found. This version of loreprinter requires that you DON'T put a file extension, this may be your issue.", ConsoleColor.DarkRed);
+                    WriteLine("ERROR: File not found. This version of loreprinter requires that you DON'T put a file extension, this may be your issue.", ConsoleColor.DarkRed);
                 }
                 else
                 {
-                    WriteLine("File not found.", ConsoleColor.DarkRed);
+                    WriteLine("ERROR: File not found.", ConsoleColor.DarkRed);
                 }
                 return;
             }
@@ -380,6 +440,15 @@ namespace LoreApp
         }
         static void InvalidateConfig()
         {
+            if (CONFIG.UseInstallLocationAsActiveDirectory)
+            {
+                ACTIVE_BASE_DIRECTORY = INSTALL_DIRECTORY;
+            }
+            else
+            {
+                ACTIVE_BASE_DIRECTORY = $"{Environment.CurrentDirectory}\\";
+            }
+
             void ensureDirectory(string directory)
             {
                 if (!Directory.Exists(directory))
@@ -425,9 +494,7 @@ namespace LoreApp
         }
         static void Main(string[] args)
         {
-            ACTIVE_BASE_DIRECTORY = System.Reflection.Assembly.GetEntryAssembly().Location.Substring(0, System.Reflection.Assembly.GetEntryAssembly().Location.LastIndexOf('\\') + 1);
-            
-            ACTIVE_BASE_DIRECTORY = $"{Environment.CurrentDirectory}\\";
+            INSTALL_DIRECTORY = System.Reflection.Assembly.GetEntryAssembly().Location.Substring(0, System.Reflection.Assembly.GetEntryAssembly().Location.LastIndexOf('\\') + 1);
 
             Console.ForegroundColor = ConsoleColor.Gray;
             if (!Do(ReloadConfig)) return;

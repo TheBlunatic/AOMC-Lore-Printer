@@ -58,7 +58,7 @@ namespace LoreApp
         {
             if (typeof(T) == typeof(bool))
             {
-                if (Value.ToString() == "false") return ConsoleColor.Red;
+                if (Value.ToString() == "False") return ConsoleColor.Red;
                 return ConsoleColor.Green;
             }
             if (typeof(T) == typeof(string))
@@ -74,6 +74,7 @@ namespace LoreApp
         const string COMMENT_IDENTIFIER = "#";
 
         public Dictionary<string, IConfigParameter> ParameterDictionary;
+        public string[] ParameterIDArray;
 
         public ConfigParameter<string> InputFolder { get; set; } = new ConfigParameter<string>(InputFolderID, "put images here");
         const string InputFolderID = "Input Folder";
@@ -94,6 +95,13 @@ namespace LoreApp
             add(InputFolder);
             add(OutputFolder);
             add(UseInstallLocationAsActiveDirectory);
+
+            ParameterIDArray = new string[ParameterDictionary.Count];
+            int i = 0;
+            foreach (string key in ParameterDictionary.Keys)
+            {
+                ParameterIDArray[i++] = key;
+            }
         }
 
         static (string, string) FileToProperty(string line) => (line.Substring(0, line.IndexOf('=') - 1), line.Substring(line.IndexOf('=') + 2));
